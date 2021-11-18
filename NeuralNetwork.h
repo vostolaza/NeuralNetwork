@@ -56,9 +56,24 @@ class NeuralNetwork {
         return res;
     }
 
+    double eSoftmax(Perceptron* p){
+        double res = 0;
+        for (int i = 0; i < p->a.size(); i++)
+            res += p->a[i] * p->w[i];
+        return exp(res);
+    }
+
+    std::vector<double> softmax(std::vector<double> values) {
+        std::vector<double> res;
+        double acum = 0;
+        for (const auto &e : values)
+            acum += e;
+        for (const auto &e : values)
+            res.push_back(e/acum);
+        return res;
+    }
+
 public:
-    // TODO: Constructor
-    // Guardar el dataset, inicializar las layers, guardar el valor en la inicial y asignar pesos y bias random al resto
     NeuralNetwork(Dataset ds, std::vector<int> target, int finalLayer, Method method){
         this->dataset = ds;
         this->target = target;
@@ -83,7 +98,6 @@ public:
             temp.emplace_back(Perceptron((size_t)perceptronsPerLayer));
     }
 
-    // TODO: Classify
     std::vector<double> classify(std::vector<double> row) {
         for (int i = 0; i < row.size(); i++){
             layers[0][i]->value = row[i];
@@ -97,34 +111,38 @@ public:
                 for (const auto &prev : layers[i-1])
                     p->a.push_back(prev->value);
 
-                switch (method){
-                    case Sigmoid : {
-                        p->value = sigmoid(p);
-                        break;
-                    }
-                    case ReLu : {
-                        p->value = relu(p);
-                        break;
-                    }
-                    case Tanh : {
-                        p->value = tanH(p);
-                        break;
-                    }
-                    default: break;
-                }
 
-                if (i == hiddenLayers)
+                if (i == hiddenLayers){
+                    p->value = eSoftmax(p);
                     res.push_back(p->value);
+                }
+                else
+                    switch (method){
+                        case Sigmoid : {
+                            p->value = sigmoid(p);
+                            break;
+                        }
+                        case ReLu : {
+                            p->value = relu(p);
+                            break;
+                        }
+                        case Tanh : {
+                            p->value = tanH(p);
+                            break;
+                        }
+                        default: break;
+                    }
             }
         }
 
-        return res;
+        return softmax(res);
     };
 
     // TODO: Backpropagation
-    void backpropagation(std::vector<double> classification, int expected) {}
+    void backpropagation(std::vector<double> classification, int expected) {
 
-    //TODO:Train
+    }
+
     void train(int epochs) {
         for (int i = 0; i < epochs; i++){
             int t = 0;
@@ -136,3 +154,8 @@ public:
         }
     };
 };
+
+
+
+[0.4, 0.1, 0.5]
+[0,0,1]
