@@ -3,52 +3,64 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include "Record.h"
 
-std::vector<std::vector<std::string>> read_record(std::string filename)
-{
+using namespace std;
 
-    // File pointer
-    std::fstream fin;
+const int n_pixeles = 784;
+const int max_val = 255;
 
-    // Open an existing file
-    fin.open(filename, std::ios::in);
+struct Record {
+    int row;
+    int label;
+    double pixeles [n_pixeles];
+    void print() {
+        cout << "row: " << row << " "; //<< "\n";
+        cout << "label: " << label << "\n";
+        //for (int i = 0; i < n_pixeles; i++)
+          //  cout << pixeles[i] << ",";
+    }
+};
 
+double normalize (int num) {
+    return num/(double)max_val;
+}
 
-    // Read the Data from the file
-    // as String Vector
-    std::vector<std::vector<std::string>> matrix;
-    std::vector<std::string> row;
-    std::string line, word, temp;
-    int i = 0;
+Record parse_record(string line, int row) {
 
-    while (fin >> temp) {
+    Record record;
+    record.row = row;
 
-        row.clear();
+    stringstream ssLine(line); 
+    string cur;
 
-        // read an entire row and
-        // store it in a string variable 'line'
-        std::getline(fin, line);
+    getline(ssLine, cur, ',');
+    record.label = stoi(cur);
 
-        // used for breaking words
-        std::stringstream s(line);
-
-        // read every column data of a row and
-        // store it in a string variable, 'word'
-        std::cout << line << "\n";
-        int j = 0;
-        while (std::getline(s, word, ',')) {
-
-            // add all the column data
-            // of a row to a vector
-            row.push_back(word);
-            std::cout << "Pushing column " << ++j << "\n";
-        }
-
-        matrix.push_back(row);
-
-        std::cout << "Read line " << ++i << "\n";
-
+    for (int i = 0; i < n_pixeles; i++) {
+        getline(ssLine, cur, ',');
+        record.pixeles[i] = normalize(stoi(cur));
     }
 
-    return matrix;
+    return record;
 };
+
+
+vector <Record> read_file(string filename){
+
+    vector<Record> records;
+    // File pointer
+    fstream file;
+
+    // Open an existing file
+    file.open(filename, ios::in);
+
+    string line;
+    getline (file, line);
+
+    int i = 0;
+    while (getline (file, line)) 
+        records.push_back(parse_record(line, i++));
+
+    return records;
+}

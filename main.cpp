@@ -1,9 +1,9 @@
-#include "Utils.h"
+#include "NeuralNetwork.h"
 
 int main(){
-
-    auto m = read_record("sign_mnist_test.csv");
-
-    // std::cout << m[0][0] << " " << m[0][1] << " " << m[0][2];
-    std::cout << m[0].size();
+    vector<Record> records = read_file("sign_mnist_train.csv");
+    cout << "parseado \n";
+    NeuralNetwork nw = NeuralNetwork(records, 24, NeuralNetwork::Tanh);
+    nw.train(1);
+    // nw.testing();
 }

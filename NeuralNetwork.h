@@ -1,66 +1,77 @@
 #include <vector>
 #include <random>
+#include "Utils.h"
 
+random_device rd;
+default_random_engine eng(rd());
+uniform_real_distribution<double> distr(-1, 2);
 
 struct Perceptron {
-    std::vector<double> w {};
-    std::vector<double> a {};
+    std::vector<double> w;
+    std::vector<double> a;
     double              b = -1;
     double              value = -1;
-
-    Perceptron() {}
-    Perceptron(double v): value(v) {}
+    Perceptron() { }
     Perceptron(size_t size) {
-        for (size_t i = 0; i < size; i++)
-            w.push_back(rand() % 255 + 1);
+        for (size_t i = 0; i < size; i++) {
+            double x = distr(eng);
+            w.push_back(x);
+            //cout << x << " ";
+        }
         b = rand() % 255 + 1;
     }
+
 };
 
 class NeuralNetwork {
-    typedef std::vector<std::vector<double>> Dataset;
-    typedef std::vector<Perceptron*> Layer;
+
+    public:
 
     enum Method {
         Sigmoid, Tanh, ReLu
     };
 
+    private:
+
+    typedef std::vector<Record> Dataset;
+    typedef std::vector<Perceptron*> Layer;
 
     Dataset dataset;
-    std::vector<int> target;
     Method method;
     int hiddenLayers = 2;
     int perceptronsPerLayer = 16;
     std::vector<Layer> layers;
 
-    double sigmoid(Perceptron* p) {
+    double accumulate(Perceptron* p) {
         double res = 0;
+        // cout << p->a.size() << " " << p->w.size() << "\n";
         for (int i = 0; i < p->a.size(); i++) {
-            res += 1/(1+ exp(-p->a[i] * p->w[i]));
+            res += p->a[i] * p->w[i];
+            // cout << res << " ";
         }
+        //cout << endl;
+        // cout << res << " ";
+        return res;
+    }
+
+    double sigmoid(Perceptron* p) {
+        //cout << exp(-accumulate(p)) << " "<< accumulate(p) << endl;
+        double res = (double)1/(1 + exp(-accumulate(p)));
+        //cout << res << " ";
         return res;
     }
 
     double relu(Perceptron* p) {
-        double res = 0;
-        for (int i = 0; i < p->a.size(); i++)
-            res += p->a[i] * p->w[i];
+        double res = accumulate(p);
         return res > 0 ? res : 0;
     }
 
     double tanH(Perceptron* p) {
-        double res = 0;
-        for (int i = 0; i < p->a.size(); i++) {
-            res += 2/(1+ exp(-2*(p->a[i] * p->w[i]))) -1;
-        }
-        return res;
+        return 2/(1 + exp(- 2 * accumulate(p))) - 1;
     }
 
     double eSoftmax(Perceptron* p){
-        double res = 0;
-        for (int i = 0; i < p->a.size(); i++)
-            res += p->a[i] * p->w[i];
-        return exp(res);
+        return exp(accumulate(p));
     }
 
     std::vector<double> softmax(std::vector<double> values) {
@@ -73,68 +84,79 @@ class NeuralNetwork {
         return res;
     }
 
-public:
-    NeuralNetwork(Dataset ds, std::vector<int> target, int finalLayer, Method method){
+    double activation(Perceptron* p) {
+        switch (method){
+            case Sigmoid : {
+                double ans = sigmoid(p);
+                //cout << ans << " ";
+                return ans;
+            }
+            case ReLu : {
+                return relu(p);
+            }
+            case Tanh : {
+                return tanH(p);
+            }
+        }
+        return -1;
+    }
+
+    public:
+
+    NeuralNetwork(Dataset ds, int finalLayer, Method method){
         this->dataset = ds;
-        this->target = target;
         this->method = method;
         Layer temp;
 
-        for (int i = 0; i < ds[0].size(); i++)
-            temp.emplace_back(Perceptron());
+        for (int i = 0; i < n_pixeles; i++)
+            temp.push_back(new Perceptron());
         layers.push_back(temp);
 
-        size_t prevLayers = ds[0].size();
+        size_t prevLayers = n_pixeles;
         for (int i = 0; i < hiddenLayers; i++){
             temp = {};
-            for (int j = 0; j < this->perceptronsPerLayer; j++)
-                temp.emplace_back(Perceptron(prevLayers));
+            for (int j = 0; j < this->perceptronsPerLayer; j++) {
+                temp.push_back(new Perceptron(prevLayers));
+            }
             layers.push_back(temp);
             prevLayers = perceptronsPerLayer;
         }
 
         temp = {};
         for (int i = 0; i < finalLayer; i++)
-            temp.emplace_back(Perceptron((size_t)perceptronsPerLayer));
+            temp.push_back(new Perceptron((size_t)perceptronsPerLayer));
+
+        layers.push_back(temp);
     }
 
-    std::vector<double> classify(std::vector<double> row) {
-        for (int i = 0; i < row.size(); i++){
-            layers[0][i]->value = row[i];
+    void testing() {
+        cout << layers[1][0]->a.size() << " " << layers[1][0]->w.size() << "\n";
+    }
+
+    std::vector<double> classify(Record record) {
+        for (int i = 0; i < n_pixeles; i++){
+            layers[0][i]->value = record.pixeles[i];
         }
 
         std::vector<double> res;
 
-        for (int i = 1; i < hiddenLayers + 2; i++){
-            for (const auto &p : layers[i]){
-
-                for (const auto &prev : layers[i-1])
+        for (int l = 1; l < hiddenLayers + 2; l++){
+            cout << "Layer: " << l << "\n";
+            for (const auto &p : layers[l]){
+                for (const auto &prev : layers[l-1]) {
                     p->a.push_back(prev->value);
-
-
-                if (i == hiddenLayers){
+                }
+                if (l == hiddenLayers+1){
+                    // sale nan
                     p->value = eSoftmax(p);
                     res.push_back(p->value);
+                } else {
+                    p->value = activation(p);   
                 }
-                else
-                    switch (method){
-                        case Sigmoid : {
-                            p->value = sigmoid(p);
-                            break;
-                        }
-                        case ReLu : {
-                            p->value = relu(p);
-                            break;
-                        }
-                        case Tanh : {
-                            p->value = tanH(p);
-                            break;
-                        }
-                        default: break;
-                    }
             }
         }
-
+        // return res;
+        
         return softmax(res);
     };
 
@@ -145,17 +167,22 @@ public:
 
     void train(int epochs) {
         for (int i = 0; i < epochs; i++){
-            int t = 0;
-            for (const auto &row : this->dataset){
-                auto res = classify(row);
-                backpropagation(res, this->target[t]);
-                t++;
+            int a = 0;
+            for (const auto &record : this->dataset){
+                auto res = classify(record);
+                double acum = 0;
+                for (const auto &r : res) {
+                    cout << r << " ";
+                    acum += r;
+                }
+                cout << "\n" << acum;
+                break;
+                // for (const double & r : res)
+                //     cout << r << " ";
+                //cout << a++ << " ";
+                //cout << endl; 
+                //backpropagation(res, record.label);
             }
         }
     };
 };
-
-
-
-[0.4, 0.1, 0.5]
-[0,0,1]
