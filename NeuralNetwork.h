@@ -40,30 +40,25 @@ class NeuralNetwork {
     Method method;
     int hiddenLayers = 2;
     int perceptronsPerLayer = 16;
+    int finalLayer;
     std::vector<Layer> layers;
 
     double accumulate(Perceptron* p) {
         double res = 0;
-        // cout << p->a.size() << " " << p->w.size() << "\n";
-        for (int i = 0; i < p->a.size(); i++) {
+        for (int i = 0; i < p->a.size(); i++)
             res += p->a[i] * p->w[i];
-            // cout << res << " ";
-        }
-        //cout << endl;
-        // cout << res << " ";
         return res;
     }
 
     double sigmoid(Perceptron* p) {
-        //cout << exp(-accumulate(p)) << " "<< accumulate(p) << endl;
-        double res = (double)1/(1 + exp(-accumulate(p)));
-        //cout << res << " ";
+        auto res =(double)1/(1 + exp(-accumulate(p)));
+        // cout << res << " ";
         return res;
     }
 
     double relu(Perceptron* p) {
         double res = accumulate(p);
-        return res > 0 ? res : 0;
+        return res > 0 ? 1 : 0;
     }
 
     double tanH(Perceptron* p) {
@@ -87,9 +82,7 @@ class NeuralNetwork {
     double activation(Perceptron* p) {
         switch (method){
             case Sigmoid : {
-                double ans = sigmoid(p);
-                //cout << ans << " ";
-                return ans;
+                return sigmoid(p);
             }
             case ReLu : {
                 return relu(p);
@@ -101,11 +94,29 @@ class NeuralNetwork {
         return -1;
     }
 
+    double derivativeActivation(Perceptron *p) {
+        switch (method){
+            case Sigmoid : {
+                auto sig = sigmoid(p);
+                return sig * (1-sig);
+            }
+            case ReLu : {
+                double res = accumulate(p);
+                return res > 0 ? 1 : 0;
+            }
+            case Tanh : {
+                return 1- pow(tanH(p),2);
+            }
+        }
+        return -1;
+    }
+
     public:
 
     NeuralNetwork(Dataset ds, int finalLayer, Method method){
         this->dataset = ds;
         this->method = method;
+        this->finalLayer = finalLayer;
         Layer temp;
 
         for (int i = 0; i < n_pixeles; i++)
@@ -129,10 +140,6 @@ class NeuralNetwork {
         layers.push_back(temp);
     }
 
-    void testing() {
-        cout << layers[1][0]->a.size() << " " << layers[1][0]->w.size() << "\n";
-    }
-
     std::vector<double> classify(Record record) {
         for (int i = 0; i < n_pixeles; i++){
             layers[0][i]->value = record.pixeles[i];
@@ -141,48 +148,87 @@ class NeuralNetwork {
         std::vector<double> res;
 
         for (int l = 1; l < hiddenLayers + 2; l++){
-            cout << "Layer: " << l << "\n";
             for (const auto &p : layers[l]){
+                p->a.clear();
                 for (const auto &prev : layers[l-1]) {
                     p->a.push_back(prev->value);
                 }
                 if (l == hiddenLayers+1){
-                    // sale nan
                     p->value = eSoftmax(p);
                     res.push_back(p->value);
                 } else {
-                    p->value = activation(p);   
+                    p->value = activation(p);
                 }
             }
         }
-        // return res;
-        
-        return softmax(res);
+        // for (const auto &r : res) {
+        //     cout << r << " ";
+        // }
+        auto ans = softmax(res);
+        for (int i = 0; i <finalLayer; i++)
+            layers[hiddenLayers+1][i]->value = ans[i];
+        return ans;
     };
 
     // TODO: Backpropagation
-    void backpropagation(std::vector<double> classification, int expected) {
+    void backpropagation(std::vector<double> classification, int expected, double alpha) {
+        vector<double> expectedProb(finalLayer, 0);
+        expectedProb[expected] = 1;
+        double err = 0;
+        for (int i = 0; i < classification.size(); i++)
+            err += pow(classification[i] - expectedProb[i],2);
+        err /= finalLayer;
+
+        for (int i = hiddenLayers + 1; i > 0; i--){
+            for (int j = 0; j < layers[i].size(); j++){
+                // Ultima capa
+                if (i == hiddenLayers + 1){
+                    int desiredValue = 0;
+                    if (j == expected) desiredValue = 1;
+                    double derivative = -(desiredValue-layers[i][j]->value)*layers[i][j]->value*(1-layers[i][j]->value)*alpha;
+                    // cout << "Derivada " << derivative << "  Value: " << layers[i][j]->value << endl;
+                    for (int k = 0; k < layers[i][j]->a.size(); k++){
+                        layers[i][j]->w[k] -= layers[i][j]->a[k]*derivative;
+                    }
+                }
+                // Todo el resto
+                else {
+                    auto derivative = derivativeActivation(layers[i][j]);
+                    for (auto &w : layers[i][j]->w)
+                        w -= derivative*alpha;
+                }
+            }
+        }
 
     }
 
-    void train(int epochs) {
-        for (int i = 0; i < epochs; i++){
-            int a = 0;
-            for (const auto &record : this->dataset){
-                auto res = classify(record);
-                double acum = 0;
-                for (const auto &r : res) {
-                    cout << r << " ";
-                    acum += r;
-                }
-                cout << "\n" << acum;
-                break;
-                // for (const double & r : res)
-                //     cout << r << " ";
-                //cout << a++ << " ";
-                //cout << endl; 
-                //backpropagation(res, record.label);
-            }
+    void train() {
+        int a = 0;
+        vector<double> res;
+        int expected = -1;
+        for (const auto &record : this->dataset){
+            res = classify(record);
+            // double acum = 0;
+            // for (const double & r : res){
+            //     // acum += r;
+            //     cout << r << " ";
+            // }
+            // cout << "\n" << acum << "\n";
+            // for (const auto &w : layers[hiddenLayers+1][0]->w)
+            //     cout << w << " ";
+            // cout << "\n";
+            // break;
+            cout << "Clasifico!\n";
+            expected = record.label;
+            backpropagation(res, expected, 0.01);
+            cout << "Backpropago! " << a++ << "\n";
+            // for (const auto &w : layers[hiddenLayers+1][0]->w)
+            //     cout << w << " ";
+            // cout << "\n";
         }
+        for (const double & r : res){
+            cout << r << " ";
+        }
+        cout << "\n" << expected << "\n";
     };
 };

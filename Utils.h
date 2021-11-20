@@ -3,7 +3,6 @@
 #include <string>
 #include <iostream>
 #include <sstream>
-#include "Record.h"
 
 using namespace std;
 
@@ -31,7 +30,7 @@ Record parse_record(string line, int row) {
     Record record;
     record.row = row;
 
-    stringstream ssLine(line); 
+    stringstream ssLine(line);
     string cur;
 
     getline(ssLine, cur, ',');
@@ -59,7 +58,7 @@ vector <Record> read_file(string filename){
     getline (file, line);
 
     int i = 0;
-    while (getline (file, line)) 
+    while (getline (file, line))
         records.push_back(parse_record(line, i++));
 
     return records;
