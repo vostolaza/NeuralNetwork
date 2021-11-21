@@ -9,15 +9,14 @@ uniform_real_distribution<double> distr(-1, 2);
 struct Perceptron {
     std::vector<double> w;
     std::vector<double> a;
+    double              delta = 0;
     double              b = -1;
     double              value = -1;
     Perceptron() { }
     Perceptron(size_t size) {
         for (size_t i = 0; i < size; i++) {
-            // double x = distr(eng);
-            double x = (rand() % 100 + 1)/double(100);
+            double x = distr(eng);
             w.push_back(x);
-            //cout << x << " ";
         }
         b = rand() % 255 + 1;
     }
@@ -53,7 +52,6 @@ class NeuralNetwork {
 
     double sigmoid(Perceptron* p) {
         auto res =(double)1/(1 + exp(-accumulate(p)));
-        // cout << res << " ";
         return res;
     }
 
@@ -162,80 +160,49 @@ class NeuralNetwork {
                 }
             }
         }
-        // for (const auto &r : res) {
-        //     cout << r << " ";
-        // }
         auto ans = softmax(res);
         for (int i = 0; i <finalLayer; i++)
             layers[hiddenLayers+1][i]->value = ans[i];
         return ans;
     };
 
-    // TODO: Backpropagation
-    void backpropagation(std::vector<double> classification, int expected, double alpha) {
+    double backpropagation(std::vector<double> classification, int expected, double alpha) {
         vector<double> expectedProb(finalLayer, 0);
         expectedProb[expected] = 1;
         double err = 0;
         for (int i = 0; i < classification.size(); i++)
-            err += pow(classification[i] - expectedProb[i],2);
-        err /= finalLayer;
+            err += (1/2)*pow(expectedProb[i] - classification[i], 2);
+        
         cout << "Error: " << err << "\n";
         for (int i = hiddenLayers + 1; i > 0; i--){
             for (int j = 0; j < layers[i].size(); j++){
                 // Ultima capa
+                int desiredValue = 0;
+                if (j == expected) desiredValue = 1;
                 if (i == hiddenLayers + 1){
-                    int desiredValue = 0;
-                    if (j == expected) desiredValue = 1;
-                    double derivative = -(desiredValue-layers[i][j]->value)*layers[i][j]->value*(1-layers[i][j]->value)*alpha;
-                    // cout << "Derivada " << derivative << "  Value: " << layers[i][j]->value << endl;
+                    double memeDeError = -(desiredValue - layers[i][j]->value);
+                    double memeDeActivation = derivativeActivation(layers[i][j]);
+                    layers[i][j]->delta = memeDeError*memeDeActivation;
                     for (int k = 0; k < layers[i][j]->a.size(); k++){
-                        layers[i][j]->w[k] -= layers[i][j]->a[k]*derivative;
+                        layers[i][j]->w[k] -= layers[i][j]->a[k]*memeDeError*memeDeActivation*alpha;
                     }
+                    layers[i][j]->b -= memeDeError*memeDeActivation*alpha;
                 }
                 // Todo el resto
                 else {
-                    auto derivative = derivativeActivation(layers[i][j]);
-                    for (auto &w : layers[i][j]->w)
-                        w -= derivative*alpha;
+                    double memeDeError = 0;
+                    double memeDeActivation = derivativeActivation(layers[i][j]);
+                    for (int k = 0; k < layers[i+1].size(); k++) {
+                        memeDeError += layers[i][k]->delta * layers[i][j]->w[k];
+                    }
+                    for (int k = 0; k < layers[i][j]->a.size(); k++){
+                        layers[i][j]->w[k] -= layers[i][j]->a[k]*memeDeError*memeDeActivation*alpha;
+                    }
+                    layers[i][j]->delta = memeDeError * memeDeActivation;
                 }
             }
         }
 
-    }
-
-     double backpropagationnew(std::vector<double> classification, int expected, double alpha, int &accCount) {
-        vector<double> expectedProb(finalLayer, 0);
-        expectedProb[expected] = 1;
-        double err = 0;
-        for (int i = 0; i < classification.size(); i++)
-            err += pow(classification[i] - expectedProb[i],2);
-        err /= finalLayer;
-
-        for (int i = hiddenLayers + 1; i > 0; i--) {
-            for (int j = 0; j < layers[i].size(); j++) {
-                // Perceptron* p = layers[i][j];
-                int desiredValue = 0;
-                if (j == expected) desiredValue = 1;
-                // if (i == hiddenLayers + 1){
-                //     int desiredValue = 0;
-                //     if (j == expected) desiredValue = 1;
-                //     double derivative = -(desiredValue-layers[i][j]->value)*layers[i][j]->value*(1-layers[i][j]->value)*alpha;
-                //     // cout << "Derivada " << derivative << "  Value: " << layers[i][j]->value << endl;
-                //     for (int k = 0; k < layers[i][j]->a.size(); k++){
-                //         layers[i][j]->w[k] -= layers[i][j]->a[k]*derivative;
-                //     }
-                //     layers[i][j]->b -= derivative;
-                // }
-                // else {
-                    double dw = derivativeActivation(layers[i][j]) * 2 * (layers[i][j]->value - desiredValue) * alpha;
-                    // cout << "Derivada " << derivative << "  Value: " << layers[i][j]->value << endl;
-                    for (int k = 0; k < layers[i][j]->a.size(); k++) {
-                        layers[i][j]->w[k] -= layers[i][j]->a[k]*dw;
-                    }
-                    layers[i][j]->b -= dw;
-                // }
-            }
-        }
         return err;
     }
 
@@ -260,7 +227,7 @@ class NeuralNetwork {
                 // cout << "Clasifico!\n";
                 expected = record.label;
                 int accCount = 0;
-                err.push_back(backpropagationnew(res, expected, 0.05, accCount));
+                err.push_back(backpropagation(res, expected, 0.05));
                 // backpropagation(res, expected, 0.05);
                 // cout << "Backpropago! " << a++ << "\n";
                 // for (const auto &w : layers[hiddenLayers+1][0]->w)
